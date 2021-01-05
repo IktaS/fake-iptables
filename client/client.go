@@ -4,20 +4,40 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"log"
 	"net/http"
 )
 
 type data struct {
-	Sender string `json:"sender"`
-	Server string `json:"server"`
+	Src    string `json:"sender"`
+	Dest   string `json:"server"`
+	HWAddr string `json:"hwaddr"`
 	Msg    string `json:"msg"`
+}
+
+func sendMessage(r *http.Request) {
+	r.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(r)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+}
+
+func recieveMessage(w http.ResponseWriter, r *http.Request) {
+	var d data
+	json.NewDecoder(r.Body).Decode(&d)
+	fmt.Println(d)
+	w.WriteHeader(http.StatusOK)
 }
 
 func main() {
 	d := &data{
-		Sender: "192.168.0.0",
-		Server: "http://localhost:8081/",
+		Src:    "http://localhost:4000/",
+		Dest:   "http://localhost:8081/",
+		HWAddr: "00:1b:63:84:45:e6",
 		Msg:    "Hello Server",
 	}
 	jsn, _ := json.Marshal(d)
@@ -25,17 +45,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	go sendMessage(req)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer resp.Body.Close()
-
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
-	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println("response Body:", string(body))
+	http.HandleFunc("/", recieveMessage)
+	log.Fatal(http.ListenAndServe(":4000", nil))
 }
