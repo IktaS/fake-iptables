@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -14,6 +15,10 @@ type data struct {
 	Dest   string `json:"server"`
 	HWAddr string `json:"hwaddr"`
 	Msg    string `json:"msg"`
+}
+
+func makeLog(d *data, prefix string) {
+	fmt.Printf("%v\nSrc: %v\nDest: %v\nHWAddr: %v\nMsg: %v\n", prefix, d.Src, d.Dest, d.HWAddr, d.Msg)
 }
 
 func sendMessage(r *http.Request) {
@@ -30,17 +35,19 @@ func sendMessage(r *http.Request) {
 func masqueradeRequest(w http.ResponseWriter, r *http.Request) {
 	var d data
 	err := json.NewDecoder(r.Body).Decode(&d)
+	makeLog(&d, "Recieved")
 	if err != nil {
 		panic(err)
 	}
-	if d.Dest == "http://localhost:8080" {
+	if d.Dest == "http://localhost:4001" {
 		val := tables[d.HWAddr]
 		d.Dest = val
 	} else {
 		tables[d.HWAddr] = d.Src
-		d.Src = "http://localhost:8080"
+		d.Src = "http://localhost:4001"
 	}
 	b, _ := json.Marshal(d)
+	makeLog(&d, "Sent")
 	req, _ := http.NewRequest(r.Method, d.Dest, bytes.NewReader(b))
 	w.WriteHeader(http.StatusOK)
 	go sendMessage(req)
@@ -48,5 +55,5 @@ func masqueradeRequest(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/", masqueradeRequest)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":4001", nil))
 }

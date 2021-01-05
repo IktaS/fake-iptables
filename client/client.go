@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 type data struct {
@@ -13,6 +14,10 @@ type data struct {
 	Dest   string `json:"server"`
 	HWAddr string `json:"hwaddr"`
 	Msg    string `json:"msg"`
+}
+
+func makeLog(d *data, prefix string) {
+	fmt.Printf("%v\nSrc: %v\nDest: %v\nHWAddr: %v\nMsg: %v\n", prefix, d.Src, d.Dest, d.HWAddr, d.Msg)
 }
 
 func sendMessage(r *http.Request) {
@@ -29,24 +34,41 @@ func sendMessage(r *http.Request) {
 func recieveMessage(w http.ResponseWriter, r *http.Request) {
 	var d data
 	json.NewDecoder(r.Body).Decode(&d)
-	fmt.Println(d)
+	makeLog(&d, "Received")
+
 	w.WriteHeader(http.StatusOK)
+}
+func sendMsg() {
+	flag := true
+	for {
+		time.Sleep(4 * time.Second)
+		d := &data{
+			Src:    "http://localhost:4000/",
+			Dest:   "http://localhost:4002/",
+			HWAddr: "00:1b:63:84:45:e6",
+			Msg:    "Hello Server",
+		}
+		makeLog(d, "Sent")
+		jsn, _ := json.Marshal(d)
+		if flag {
+			req, err := http.NewRequest("POST", "http://localhost:4001/", bytes.NewReader(jsn))
+			if err != nil {
+				panic(err)
+			}
+			go sendMessage(req)
+		} else {
+			req, err := http.NewRequest("POST", "http://localhost:4002/", bytes.NewReader(jsn))
+			if err != nil {
+				panic(err)
+			}
+			go sendMessage(req)
+		}
+		flag = !flag
+	}
 }
 
 func main() {
-	d := &data{
-		Src:    "http://localhost:4000/",
-		Dest:   "http://localhost:8081/",
-		HWAddr: "00:1b:63:84:45:e6",
-		Msg:    "Hello Server",
-	}
-	jsn, _ := json.Marshal(d)
-	req, err := http.NewRequest("POST", "http://localhost:8080/", bytes.NewReader(jsn))
-	if err != nil {
-		panic(err)
-	}
-	go sendMessage(req)
-
+	go sendMsg()
 	http.HandleFunc("/", recieveMessage)
 	log.Fatal(http.ListenAndServe(":4000", nil))
 }
